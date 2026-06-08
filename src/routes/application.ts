@@ -53,7 +53,8 @@ router.post('/apply', (req: Request, res: Response) => {
     application.applicantName,
     'consumer',
     `${application.applicantName} 提交了产品「${product.name}」的${body.type === 'trial' ? '试用' : '正式'}申请`,
-    { applicationId: application.id, type: body.type }
+    { applicationId: application.id, type: body.type },
+    { applicationId: application.id }
   );
 
   return success(res, application, '申请提交成功');
@@ -130,7 +131,8 @@ router.post('/approve', (req: Request, res: Response) => {
     body.reviewerName,
     'reviewer',
     `${body.reviewerName} ${body.approved ? '通过' : '驳回'}了${application.applicantName}的「${product.name}」申请`,
-    { applicationId: application.id, approved: body.approved, comment: body.comment }
+    { applicationId: application.id, approved: body.approved, comment: body.comment },
+    { applicationId: application.id }
   );
 
   if (body.approved) {
@@ -154,6 +156,8 @@ router.post('/approve', (req: Request, res: Response) => {
       unitPrice: product.price,
       totalCallsAllowed: application.type === 'trial' ? 100 : undefined,
       callsUsed: 0,
+      totalDataVolumeBytes: 0,
+      accumulatedUsageAmount: 0,
       amountPaid: 0,
     };
 
@@ -181,7 +185,8 @@ router.post('/approve', (req: Request, res: Response) => {
       application.applicantName,
       'consumer',
       `与${application.applicantName}签订产品「${product.name}」的授权合约`,
-      { contractId: contract.id, validDays }
+      { contractId: contract.id, validDays },
+      { applicationId: application.id, contractId: contract.id }
     );
 
     return success(

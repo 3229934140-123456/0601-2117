@@ -126,6 +126,8 @@ export interface Contract {
   unitPrice: number;
   totalCallsAllowed?: number;
   callsUsed: number;
+  totalDataVolumeBytes: number;
+  accumulatedUsageAmount: number;
   amountPaid: number;
 }
 
@@ -154,6 +156,25 @@ export interface UsageReportRequest {
   periodEnd: string;
 }
 
+export type BillDetailType =
+  | 'per_call_fee'
+  | 'per_volume_fee'
+  | 'monthly_subscription'
+  | 'yearly_subscription'
+  | 'one_time_fee';
+
+export interface BillDetailItem {
+  id: string;
+  billId: string;
+  type: BillDetailType;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  subtotal: number;
+  metadata?: Record<string, any>;
+}
+
 export interface BillSummary {
   id: string;
   contractId: string;
@@ -162,8 +183,11 @@ export interface BillSummary {
   licenseeId: string;
   licenseeName: string;
   billingPeriod: string;
+  pricingModel: PricingModel;
   totalCalls: number;
+  totalDataVolumeBytes: number;
   unitPrice: number;
+  detailTotal: number;
   totalAmount: number;
   status: 'unpaid' | 'paid' | 'overdue';
   generatedAt: string;
@@ -173,7 +197,7 @@ export interface BillSummary {
 
 export interface CirculationRecord {
   id: string;
-  recordType: 'registration' | 'application' | 'approval' | 'contract_sign' | 'usage' | 'offline';
+  recordType: 'registration' | 'application' | 'approval' | 'contract_sign' | 'usage' | 'offline' | 'bill_pay';
   productId: string;
   productName: string;
   partyId: string;
@@ -182,6 +206,10 @@ export interface CirculationRecord {
   description: string;
   timestamp: string;
   metadata: Record<string, any>;
+  applicationId?: string;
+  contractId?: string;
+  billId?: string;
+  tokenId?: string;
 }
 
 export interface CirculationQueryParams {
@@ -205,6 +233,10 @@ export interface OfflineNotification {
   productId: string;
   productName: string;
   reason: string;
-  notifiedParties: string[];
+  ownerId: string;
+  ownerName: string;
+  affectedContractIds: string[];
+  notifiedLicenseeIds: string[];
+  readByLicenseeIds: string[];
   createdAt: string;
 }

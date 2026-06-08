@@ -5,6 +5,7 @@ import applicationRouter from './routes/application';
 import contractRouter from './routes/contract';
 import usageRouter from './routes/usage';
 import supervisionRouter from './routes/supervision';
+import acceptanceRouter from './routes/acceptance';
 import { fail } from './utils';
 
 const app = express();
@@ -25,7 +26,7 @@ app.get('/health', (_req: Request, res: Response) => {
     message: 'ok',
     data: {
       service: 'data-element-circulation-platform',
-      version: '1.0.0',
+      version: '1.1.0',
       timestamp: new Date().toISOString(),
     },
   });
@@ -36,6 +37,7 @@ app.use('/api/application', applicationRouter);
 app.use('/api/contract', contractRouter);
 app.use('/api/usage', usageRouter);
 app.use('/api/supervision', supervisionRouter);
+app.use('/api/acceptance', acceptanceRouter);
 
 app.use((_req: Request, res: Response) => {
   fail(res, '接口不存在', 404);
@@ -52,11 +54,12 @@ app.listen(PORT, () => {
   console.log(`健康检查: http://localhost:${PORT}/health`);
   console.log('');
   console.log('API 路由列表:');
-  console.log('  /api/product/*       - 数据产品（登记、查询、下架等）');
+  console.log('  /api/product/*       - 数据产品（登记、查询、下架、下架通知）');
   console.log('  /api/application/*   - 样例/试用申请与审批');
   console.log('  /api/contract/*      - 合约状态、授权凭证、权限校验');
   console.log('  /api/usage/*         - 用量回传、结算明细、账单');
-  console.log('  /api/supervision/*   - 监管流通记录查询');
+  console.log('  /api/supervision/*   - 监管流通记录查询（按产品/调用方追溯）');
+  console.log('  /api/acceptance/*    - 端到端验收测试');
 });
 
 export default app;

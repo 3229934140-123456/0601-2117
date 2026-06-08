@@ -6,6 +6,7 @@ import {
   ProductRegistrationRequest,
   ProductQueryParams,
   ProductStatus,
+  OfflineNotification,
 } from '../types';
 
 const router = Router();
@@ -125,11 +126,13 @@ router.put('/:id/status', (req: Request, res: Response) => {
     product.offlineAt = product.updatedAt;
     product.offlineReason = reason || '产品下架';
 
-    const affectedLicensees = new Set<string>();
+    const affectedContractIds: string[] = [];
+    const affectedLicenseeIds = new Set<string>();
     store.contracts.forEach((c) => {
       if (c.productId === id && c.status === 'active') {
-        c.status = 'terminated';
-        affectedLicensees.add(c.licenseeId);
+      c.status = 'terminated';
+      affectedContractIds.push(c.id);
+      affectedLicenseeIds.add(c.licenseeId);
       }
     });
 
@@ -139,15 +142,20 @@ router.put('/:id/status', (req: Request, res: Response) => {
       }
     });
 
-    if (affectedLicensees.size > 0) {
-      store.offlineNotifications.push({
+    if (affectedContractIds.length > 0) {
+      const notification: OfflineNotification = {
         id: store.generateId(),
         productId: product.id,
         productName: product.name,
         reason: product.offlineReason,
-        notifiedParties: Array.from(affectedLicensees),
+        ownerId: product.ownerId,
+        ownerName: product.ownerName,
+        affectedContractIds,
+        notifiedLicenseeIds: Array.from(affectedLicenseeIds),
+        readByLicenseeIds: [],
         createdAt: store.now(),
-      });
+      };
+      store.offlineNotifications.push(notification);
     }
 
     store.addCirculationRecord(
@@ -158,17 +166,105 @@ router.put('/:id/status', (req: Request, res: Response) => {
       product.ownerName,
       'provider',
       `数据产品「${product.name}」已下架，原因：${product.offlineReason}`,
-      { reason: product.offlineReason }
+      {
+        reason: product.offlineReason,
+        affectedContractCount: affectedContractIds.length,
+        affectedLicenseeCount: affectedLicenseeIds.size,
+      },
+      { contractId: affectedContractIds[0] }
     );
   }
 
   return success(res, product, '产品状态更新成功');
 });
 
-router.get('/:id/notifications', (req: Request, res: Response) => {
-  const { id } = req.params;
-  const notifications = store.offlineNotifications.filter((n) => n.notifiedParties.includes(id));
-  return success(res, notifications);
+router.get('/notifications/mine', (req: Request, res: Response) => {
+  const { licenseeId, unreadOnly } = req.query;
+  if (!licenseeId) {
+    return fail(res, '调用方ID(licenseeId)为必填项');
+  }
+
+  let notifications = store.offlineNotifications.filter((n) =>
+    n.notifiedLicenseeIds.includes(licenseeId as string)
+  );
+
+  if (unreadOnly === 'true') {
+    notifications = notifications.filter(
+      (n) => !n.readByLicenseeIds.includes(licenseeId as string)
+    );
+  }
+
+  const enriched = notifications.map((n) => ({
+    ...n,
+    isRead: n.readByLicenseeIds.includes(licenseeId as string),
+    affectedContracts: n.affectedContractIds.map((cid) => {
+      const c = store.contracts.get(cid);
+      return c
+        ? { id: c.id, status: c.status, licenseeName: c.licenseeName, signedAt: c.signedAt, expiresAt: c.expiresAt }
+        : { id: cid };
+    }),
+  }));
+
+  return success(res, {
+    licenseeId,
+    total: enriched.length,
+    unread: enriched.filter((n) => !n.isRead).length,
+    notifications: enriched,
+  });
+});
+
+router.post('/notifications/:notificationId/read', (req: Request, res: Response) => {
+  const { notificationId } = req.params;
+  const { licenseeId } = req.body as { licenseeId: string };
+
+  if (!licenseeId) {
+    return fail(res, '调用方ID(licenseeId)为必填项');
+  }
+
+  const notification = store.offlineNotifications.find((n) => n.id === notificationId);
+  if (!notification) {
+    return fail(res, '通知不存在', 404);
+  }
+  if (!notification.notifiedLicenseeIds.includes(licenseeId)) {
+    return fail(res, '无权标记非本人通知');
+  }
+  if (!notification.readByLicenseeIds.includes(licenseeId)) {
+    notification.readByLicenseeIds.push(licenseeId);
+  }
+
+  return success(
+    res,
+    {
+      notificationId,
+      isRead: true,
+      readByCount: notification.readByLicenseeIds.length,
+      notifiedCount: notification.notifiedLicenseeIds.length,
+    },
+    '已标记为已读'
+  );
+});
+
+router.get('/:productId/notifications', (req: Request, res: Response) => {
+  const { productId } = req.params;
+  const product = store.products.get(productId);
+  if (!product) {
+    return fail(res, '产品不存在', 404);
+  }
+
+  const notifications = store.offlineNotifications
+    .filter((n) => n.productId === productId)
+    .map((n) => ({
+      ...n,
+      readCount: n.readByLicenseeIds.length,
+      unreadCount: n.notifiedLicenseeIds.length - n.readByLicenseeIds.length,
+    }));
+
+  return success(res, {
+    productId,
+    productName: product.name,
+    totalNotifications: notifications.length,
+    notifications,
+  });
 });
 
 export default router;
